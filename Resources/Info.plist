@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Nom de l'exécutable dans Contents/MacOS/ -->
+    <key>CFBundleExecutable</key>
+    <string>ObsiVaults</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>fr.arthur.obsivaults</string>
+
+    <key>CFBundleName</key>
+    <string>ObsiVaults</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>ObsiVaults</string>
+
+    <!-- Icône de l'app (Finder, Réglages Système…). Fichier AppIcon.icns dans Contents/Resources/ -->
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleDevelopmentRegion</key>
+    <string>fr</string>
+
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+
+    <!-- Pas d'icône dans le Dock : uniquement la barre des menus -->
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>
