@@ -82,7 +82,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         guard let button = statusItem.button, !popover.isShown else { return }
         // Disques branchés ou débranchés, dossiers déplacés : la liste est à jour à chaque ouverture.
         store.refreshLocations()
-        actions.refreshLaunchAtLogin()
+        actions.refresh()
         activateApp()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()

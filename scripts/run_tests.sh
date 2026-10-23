@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run_tests.sh — Compile et lance les tests de la liste des vaults et de obsidian.json.
+# run_tests.sh — Compile et lance les tests de la liste des vaults, de obsidian.json et des titres de fenêtres.
 # Les tests travaillent dans un dossier temporaire : ni la vraie liste ni Obsidian ne sont touchés.
 set -euo pipefail
 
@@ -10,6 +10,7 @@ trap 'rm -rf "${TEST_TMP}"' EXIT
 
 swiftc \
     Sources/ObsidianRegistry.swift \
+    Sources/ObsidianWindows.swift \
     Sources/VaultStore.swift \
     Tests/main.swift \
     -swift-version 5 \

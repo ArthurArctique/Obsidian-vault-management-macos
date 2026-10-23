@@ -102,6 +102,39 @@ expectThrows("un obsidian.json illisible doit être signalé") {
 expect(String(data: try Data(contentsOf: brokenConfig), encoding: .utf8) == "{ pas du json",
        "un obsidian.json illisible ne doit pas être écrasé")
 
+// MARK: - Vaults ouverts dans Obsidian
+
+expect(try registry.openVaultPaths() == [ObsidianRegistry.normalizedPath(notes.path)],
+       "seuls les vaults marqués ouverts doivent être signalés")
+try registry.markClosed(path: notes.path + "/")
+let afterClose = readJSON(obsidianConfig)
+let closedEntry = (afterClose["vaults"] as? [String: Any])?["aaaaaaaaaaaaaaaa"] as? [String: Any]
+expect(closedEntry != nil && closedEntry?["open"] == nil, "le drapeau « ouvert » doit être retiré")
+expect(closedEntry?["ts"] as? Int == 1, "les autres champs du vault fermé doivent être conservés")
+expect(afterClose["updateDisabled"] as? Bool == true, "fermer un vault doit conserver les réglages d'Obsidian")
+expect(((readJSON(registry.backupURL)["vaults"] as? [String: Any])?["aaaaaaaaaaaaaaaa"] as? [String: Any])?["open"]
+           as? Bool == true, "une copie obsidian.json.bak doit être faite avant la fermeture")
+expect(try registry.openVaultPaths().isEmpty, "plus aucun vault ne doit être ouvert")
+let beforeNoop = try Data(contentsOf: obsidianConfig)
+try registry.markClosed(path: cours.path)
+expect(try Data(contentsOf: obsidianConfig) == beforeNoop, "fermer un vault déjà fermé ne doit rien réécrire")
+
+let openNames = ["1_Ecriture", "Cours", "Projet - Cours", "Obsidian"]
+func windowVault(_ title: String) -> String? { ObsidianWindows.vaultName(inTitle: title, among: openNames) }
+expect(windowVault("Notes de version 1.14.5 - 1_Ecriture - Obsidian 1.14.5") == "1_Ecriture",
+       "la fenêtre d'une note doit être attribuée à son vault")
+expect(windowVault("Cours - Obsidian 1.14.5") == "Cours", "une fenêtre sans note ouverte doit être reconnue")
+expect(windowVault("Plan - Projet - Cours - Obsidian 1.14.5") == "Projet - Cours",
+       "le nom de vault le plus long doit l'emporter")
+expect(windowVault("Idées - Obsidian - Obsidian 1.14.5") == "Obsidian", "un vault nommé « Obsidian » doit être reconnu")
+expect(windowVault("Obsidian - Obsidian v1.4.16") == "Obsidian", "l'ancien format de titre doit être reconnu")
+expect(windowVault("Obsidian") == nil, "le sélecteur de vaults n'appartient à aucun vault")
+expect(windowVault("Note - Autre - Obsidian 1.14.5") == nil, "une fenêtre d'un vault fermé ne doit pas être attribuée")
+expect(ObsidianWindows.vaultName(inTitle: "Note - E\u{301}criture - Obsidian 1.14.5", among: ["\u{C9}criture"])
+           == "\u{C9}criture", "les accents composés et décomposés des titres doivent être équivalents")
+expect(ObsidianWindows.closeWindows(ofVaultNamed: "Obsidian", otherOpenNames: ["Cours", "Obsidian"], pid: 0)
+           == .ambiguous, "deux vaults ouverts du même nom ne doivent pas être départagés au hasard")
+
 // MARK: - Premier lancement : import depuis Obsidian
 
 let icloudVault = makeFolder("Mobile Documents/com~apple~CloudDocs/Obsidian")

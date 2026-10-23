@@ -1,6 +1,6 @@
 # ObsiVaults — tes vaults Obsidian dans la barre des menus
 
-ObsiVaults est une petite app macOS qui vit dans la barre des menus. Un clic sur son icône (des livres) ouvre un panneau coloré avec tous tes vaults Obsidian, rangés dans tes propres catégories ; un clic sur un vault l'ouvre dans Obsidian.
+ObsiVaults est une petite app macOS qui vit dans la barre des menus. Un clic sur son icône (des livres) ouvre un panneau coloré avec tous tes vaults Obsidian, rangés dans tes propres catégories ; un clic sur un vault l'ouvre dans Obsidian, et la croix d'un vault ouvert le ferme.
 
 Tout se gère depuis ce panneau, sans autre fenêtre : catégories (nom, couleur, icône, ordre), vaults (nom affiché, catégorie, ordre, dossier). Seul le Finder s'ouvre, pour choisir un dossier. L'app retrouve un dossier déplacé ou un disque externe qui a changé de nom, et inscrit elle-même dans Obsidian les dossiers qu'il ne connaît pas encore.
 
@@ -42,9 +42,10 @@ Deux vaults dont les dossiers portent le même nom reçoivent le nom de leur dos
 
 ### Le panneau
 
-- **En haut** : le nombre de vaults et de catégories, et le bouton **Modifier**.
+- **En haut** : le nombre de vaults et de catégories (ou de vaults ouverts, s'il y en a), et le bouton **Modifier**.
 - **Au milieu** : une carte colorée par catégorie, avec sa pastille (couleur + icône) et ses vaults.
   - **Clic sur un vault** : il s'ouvre dans Obsidian et le panneau se referme.
+  - **Vault ouvert dans Obsidian** : son livre est ouvert et une croix ⓧ apparaît à droite. **Clic sur la croix** : sa fenêtre se ferme dans Obsidian, le panneau reste ouvert (voir [Fermer un vault](#fermer-un-vault)).
   - **Survol d'un vault** : 📁 l'affiche dans le Finder, **⋯** ouvre toutes ses actions (renommer, changer le chemin, déplacer vers une autre catégorie, monter, descendre, retirer).
   - **⋯ d'une catégorie** : ajouter un vault ici, importer les vaults d'Obsidian ici, renommer, couleur et icône, monter, descendre, supprimer.
   - **Vault avec ⚠ orange** : son dossier est introuvable (disque externe débranché, dossier supprimé). Un clic explique le problème et propose **Changer le chemin…**.
@@ -91,6 +92,20 @@ Obsidian ouvre un vault avec un lien `obsidian://open?vault=<identifiant>`, à c
 
 Après un changement de chemin, la première ouverture inscrit le nouveau dossier de la même façon. L'ancienne entrée reste dans la liste d'Obsidian, sans gêner.
 
+## Fermer un vault
+
+Obsidian note dans `obsidian.json` quels vaults sont ouverts : c'est ce qui fait apparaître la croix. Il n'a en revanche aucune commande pour fermer un vault. ObsiVaults appuie donc à ta place sur le bouton de fermeture de la fenêtre, ce que macOS n'autorise qu'avec l'accès **Accessibilité**.
+
+- **La première fois**, un bandeau propose **Autoriser l'accès** : macOS affiche sa demande, puis active ObsiVaults dans *Réglages Système → Confidentialité et sécurité → Accessibilité*, et clique de nouveau sur la croix. Ensuite, la fenêtre du vault se ferme directement, même si elle est sur un autre bureau (Obsidian l'amène d'abord à l'écran).
+- **Sans cet accès**, ObsiVaults ne peut fermer un vault qu'en quittant Obsidian :
+  - si c'est le seul vault ouvert, Obsidian quitte aussitôt ;
+  - sinon, le bandeau propose **Redémarrer Obsidian** : Obsidian quitte, puis se relance en arrière-plan et rouvre les autres vaults.
+
+  Dans les deux cas, ObsiVaults retire ce vault de ceux qu'Obsidian rouvre à son prochain lancement (copie préalable dans `obsidian.json.bak`).
+- **Deux vaults ouverts dont les dossiers portent le même nom** (par exemple deux dossiers `Obsidian`) ont des fenêtres au même titre : ObsiVaults ne sait pas laquelle fermer et propose de redémarrer Obsidian.
+
+Fermer un vault ne touche à aucun fichier : c'est exactement comme fermer sa fenêtre dans Obsidian.
+
 ## Réglages et sauvegarde
 
 Tout est dans `~/Library/Application Support/ObsiVaults/` :
@@ -110,6 +125,7 @@ Pour retrouver un dossier déplacé ou renommé, ou un disque externe qui a chan
 
 - **L'icône n'apparaît pas dans la barre des menus.** Sur un MacBook à encoche, une barre trop remplie cache des icônes sous l'encoche. ObsiVaults se place volontairement loin à droite de l'encoche au premier lancement. Si elle reste cachée, retire d'autres icônes (⌘ + glisser hors de la barre). Avec un gestionnaire de barre des menus (Thaw, Ice, Bartender…), elle peut aussi atterrir dans sa section masquée : ramène-la dans la section visible. Relancer l'app ouvre le panneau dans tous les cas.
 - **« Obsidian ne s'est pas fermé »** : ferme Obsidian toi-même (⌘Q), puis rouvre le vault depuis le panneau.
+- **La croix demande encore l'accès Accessibilité alors qu'ObsiVaults est coché dans les Réglages** : c'est arrivé après une recompilation (`./build.sh`). L'app est signée sans certificat Apple : macOS la voit comme une nouvelle app à chaque compilation. Retire ObsiVaults de la liste *Accessibilité* (bouton −), puis autorise-le de nouveau.
 - **Ouvrir à la connexion ne se coche pas** : macOS peut demander une validation dans *Réglages Système → Général → Ouverture* ; ObsiVaults ouvre ce panneau quand c'est nécessaire.
 
 ## Développement
@@ -126,10 +142,11 @@ obsidian-launcher/
 │   ├── PanelView.swift        contenu du panneau (SwiftUI) : cartes, mode modification, bandeaux
 │   ├── Theme.swift            couleurs, icônes des catégories, boutons
 │   ├── VaultActions.swift     actions du panneau, bandeaux, sélecteur du Finder
-│   ├── VaultOpener.swift      ouverture dans Obsidian (fermeture, inscription, lien)
+│   ├── VaultOpener.swift      ouverture et fermeture dans Obsidian (inscription, lien, redémarrage)
+│   ├── ObsidianWindows.swift  fenêtres d'Obsidian : présence, titres, fermeture par l'accessibilité
 │   ├── VaultStore.swift       catégories, vaults, config.json, signets
-│   └── ObsidianRegistry.swift lecture et écriture de obsidian.json
-├── Tests/main.swift         tests de VaultStore et ObsidianRegistry
+│   └── ObsidianRegistry.swift lecture et écriture de obsidian.json (inscription, vaults ouverts)
+├── Tests/main.swift         tests de VaultStore, ObsidianRegistry et des titres de fenêtres
 └── scripts/
     ├── run_tests.sh         compile et lance les tests (dans un dossier temporaire)
     ├── make_icon.sh         régénère Resources/AppIcon.icns

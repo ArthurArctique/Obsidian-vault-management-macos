@@ -27,6 +27,10 @@ enum ObsidianRegistryError: LocalizedError {
 /// se faire Obsidian fermé : en quittant, il réécrit le fichier avec sa liste en mémoire et
 /// effacerait l'entrée ajoutée entre-temps. C'est `VaultOpener` qui s'en charge.
 ///
+/// Chaque vault porte aussi un drapeau `open` qu'Obsidian tient à jour pendant qu'il tourne : il le pose
+/// à l'ouverture d'une fenêtre et le retire à sa fermeture, sauf pour la dernière fenêtre fermée et pour
+/// celles encore ouvertes quand il quitte, qu'il rouvrira au prochain lancement.
+///
 /// Les clés inconnues du fichier sont conservées telles quelles : on ne touche qu'à `vaults`.
 final class ObsidianRegistry {
     static let bundleIdentifier = "md.obsidian"
@@ -75,21 +79,38 @@ final class ObsidianRegistry {
             "ts": Int64(Date().timeIntervalSince1970 * 1000),
         ]
         config["vaults"] = vaults
-
-        let fm = FileManager.default
-        do {
-            try fm.createDirectory(at: configURL.deletingLastPathComponent(),
-                                   withIntermediateDirectories: true)
-            if fm.fileExists(atPath: configURL.path) {
-                try? fm.removeItem(at: backupURL)
-                try fm.copyItem(at: configURL, to: backupURL)
-            }
-            let data = try JSONSerialization.data(withJSONObject: config)
-            try data.write(to: configURL, options: .atomic)
-        } catch {
-            throw ObsidianRegistryError.unwritable(path: configURL.path, reason: error.localizedDescription)
-        }
+        try write(config)
         return id
+    }
+
+    /// Chemins, sous la forme de `normalizedPath`, des vaults marqués ouverts. Ne dit rien de leurs
+    /// fenêtres : Obsidian peut être fermé, ou lancé sans fenêtre après la fermeture de la dernière.
+    func openVaultPaths() throws -> Set<String> {
+        let vaults = try readConfig()["vaults"] as? [String: Any] ?? [:]
+        return Set(vaults.values.compactMap { value in
+            guard let entry = value as? [String: Any], entry["open"] as? Bool == true,
+                  let path = entry["path"] as? String else { return nil }
+            return Self.normalizedPath(path)
+        })
+    }
+
+    /// Retire le drapeau `open` du vault situé à `path`, pour qu'Obsidian ne le rouvre pas au prochain
+    /// lancement. Comme `register`, à faire Obsidian fermé, et le fichier est d'abord copié dans `.bak`.
+    func markClosed(path: String) throws {
+        var config = try readConfig()
+        guard var vaults = config["vaults"] as? [String: Any] else { return }
+        let target = Self.normalizedPath(path)
+        var changed = false
+        for (id, value) in vaults {
+            guard var entry = value as? [String: Any], entry["open"] != nil,
+                  let entryPath = entry["path"] as? String, Self.normalizedPath(entryPath) == target else { continue }
+            entry.removeValue(forKey: "open")
+            vaults[id] = entry
+            changed = true
+        }
+        guard changed else { return }
+        config["vaults"] = vaults
+        try write(config)
     }
 
     static func openURL(vaultID: String) -> URL {
@@ -115,6 +136,22 @@ final class ObsidianRegistry {
     /// Même format qu'Obsidian : 16 caractères hexadécimaux.
     private static func makeVaultID() -> String {
         (0..<16).map { _ in String(Int.random(in: 0..<16), radix: 16) }.joined()
+    }
+
+    private func write(_ config: [String: Any]) throws {
+        let fm = FileManager.default
+        do {
+            try fm.createDirectory(at: configURL.deletingLastPathComponent(),
+                                   withIntermediateDirectories: true)
+            if fm.fileExists(atPath: configURL.path) {
+                try? fm.removeItem(at: backupURL)
+                try fm.copyItem(at: configURL, to: backupURL)
+            }
+            let data = try JSONSerialization.data(withJSONObject: config)
+            try data.write(to: configURL, options: .atomic)
+        } catch {
+            throw ObsidianRegistryError.unwritable(path: configURL.path, reason: error.localizedDescription)
+        }
     }
 
     private func readConfig() throws -> [String: Any] {

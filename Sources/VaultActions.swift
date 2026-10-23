@@ -10,12 +10,16 @@ struct Banner: Identifiable {
     var title: String
     var message: String?
     var actions: [BannerAction]
+    /// Le bandeau disparaît à l'ouverture du panneau dès que ce qu'il demande est fait.
+    var isResolved: (() -> Bool)?
 
-    init(_ kind: Kind, _ title: String, _ message: String? = nil, actions: [BannerAction] = []) {
+    init(_ kind: Kind, _ title: String, _ message: String? = nil, actions: [BannerAction] = [],
+         isResolved: (() -> Bool)? = nil) {
         self.kind = kind
         self.title = title
         self.message = message
         self.actions = actions
+        self.isResolved = isResolved
     }
 
     init(error: Error, title: String) {
@@ -46,6 +50,8 @@ final class VaultActions: ObservableObject {
         didSet { scheduleAutoDismiss() }
     }
     @Published private(set) var launchesAtLogin = false
+    /// Vaults ouverts dans Obsidian, sous la forme de `ObsidianRegistry.normalizedPath`.
+    @Published private(set) var openVaultPaths: Set<String> = []
 
     let store: VaultStore
     private let opener: VaultOpener
@@ -63,7 +69,15 @@ final class VaultActions: ObservableObject {
             self?.banner = nil
             self?.closePanel()
         }
+        opener.openVaultsChanged = { [weak self] in self?.refreshOpenVaults() }
         refreshLaunchAtLogin()
+    }
+
+    /// À l'ouverture du panneau : état des vaults dans Obsidian et bandeaux devenus inutiles.
+    func refresh() {
+        refreshLaunchAtLogin()
+        refreshOpenVaults()
+        if banner?.isResolved?() == true { banner = nil }
     }
 
     // MARK: - Vaults
@@ -76,6 +90,22 @@ final class VaultActions: ObservableObject {
         }
         banner = nil
         opener.open(vault)
+    }
+
+    func isOpen(_ vault: Vault) -> Bool {
+        openVaultPaths.contains(ObsidianRegistry.normalizedPath(vault.path))
+    }
+
+    /// Ferme le vault dans Obsidian ; le panneau reste ouvert.
+    func close(_ id: UUID) {
+        guard let vault = store.vault(id) else { return }
+        banner = nil
+        opener.close(vault)
+    }
+
+    func refreshOpenVaults() {
+        let paths = opener.openVaultPaths()
+        if paths != openVaultPaths { openVaultPaths = paths }
     }
 
     func reveal(_ id: UUID) {

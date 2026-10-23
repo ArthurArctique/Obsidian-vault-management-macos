@@ -119,6 +119,7 @@ private struct ContentHeightKey: PreferenceKey {
 
 private struct PanelHeader: View {
     @EnvironmentObject private var store: VaultStore
+    @EnvironmentObject private var actions: VaultActions
     @EnvironmentObject private var state: PanelState
 
     var body: some View {
@@ -161,10 +162,12 @@ private struct PanelHeader: View {
     }
 
     private var subtitle: String {
-        state.isEditing
-            ? "Mode modification"
-            : "\(countLabel(store.vaults.count, "vault", "vaults")) · "
-                + countLabel(store.categories.count, "catégorie", "catégories")
+        if state.isEditing { return "Mode modification" }
+        // Une seule ligne : le nombre de vaults ouverts remplace celui des catégories, visibles en cartes.
+        let open = store.vaults.filter(actions.isOpen).count
+        return "\(countLabel(store.vaults.count, "vault", "vaults")) · "
+            + (open > 0 ? countLabel(open, "ouvert", "ouverts")
+                        : countLabel(store.categories.count, "catégorie", "catégories"))
     }
 
     /// Termine d'abord la saisie en cours, pour que le nom tapé soit enregistré.
@@ -613,7 +616,13 @@ private struct VaultRow: View {
     @State private var isHovering = false
 
     private var available: Bool { store.isAvailable(vault) }
+    private var isOpen: Bool { actions.isOpen(vault) }
     private var otherCategories: [VaultCategory] { store.categories.filter { $0.id != vault.categoryID } }
+
+    private var icon: String {
+        if !available { return "exclamationmark.triangle.fill" }
+        return isOpen ? "book.fill" : "book.closed.fill"
+    }
 
     var body: some View {
         if state.removingVault == vault.id {
@@ -625,10 +634,10 @@ private struct VaultRow: View {
         }
     }
 
-    // Liste : un clic ouvre le vault.
+    // Liste : un clic ouvre le vault, la croix le ferme s'il est ouvert.
     private var row: some View {
         HStack(spacing: 8) {
-            Image(systemName: available ? "book.closed.fill" : "exclamationmark.triangle.fill")
+            Image(systemName: icon)
                 .font(.system(size: 12))
                 .foregroundColor(available ? color : .orange)
                 .frame(width: 16)
@@ -653,6 +662,10 @@ private struct VaultRow: View {
                     IconButton(systemImage: "folder", help: "Afficher dans le Finder") { actions.reveal(vault.id) }
                     vaultMenu
                 }
+                if isOpen {
+                    IconButton(systemImage: "xmark.circle.fill", help: "Fermer « \(vault.name) » dans Obsidian",
+                               size: 13) { actions.close(vault.id) }
+                }
             }
         }
         .padding(.horizontal, 7)
@@ -664,12 +677,17 @@ private struct VaultRow: View {
         .onTapGesture {
             if state.renamingVault != vault.id { actions.open(vault.id) }
         }
-        .help(available ? VaultActions.shortPath(vault.path) : "Introuvable : \(VaultActions.shortPath(vault.path))")
+        .help(available
+            ? VaultActions.shortPath(vault.path) + (isOpen ? " — ouvert dans Obsidian" : "")
+            : "Introuvable : \(VaultActions.shortPath(vault.path))")
     }
 
     private var vaultMenu: some View {
         Menu {
-            Button("Ouvrir dans Obsidian") { actions.open(vault.id) }
+            Button(isOpen ? "Afficher dans Obsidian" : "Ouvrir dans Obsidian") { actions.open(vault.id) }
+            if isOpen {
+                Button("Fermer dans Obsidian") { actions.close(vault.id) }
+            }
             Button("Afficher dans le Finder") { actions.reveal(vault.id) }
             Divider()
             Button("Renommer") {
@@ -869,7 +887,7 @@ struct BannerView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if !banner.actions.isEmpty {
-                    HStack(spacing: 6) {
+                    FlowLayout(spacing: 6) {
                         ForEach(banner.actions) { action in
                             AccentButton(title: action.title, systemImage: action.systemImage,
                                          color: action.isDestructive ? .red : tint) {
@@ -918,18 +936,28 @@ struct FlowLayout: Layout {
         return CGSize(width: proposal.width ?? widest, height: y + rowHeight)
     }
 
+    /// Les éléments d'une même ligne sont centrés verticalement : un bouton plein à côté d'une pastille.
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        var rows: [[(subview: LayoutSubview, size: CGSize)]] = [[]]
+        var x = bounds.minX
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
             if x > bounds.minX && x + size.width > bounds.maxX {
+                rows.append([])
                 x = bounds.minX
-                y += rowHeight + spacing
-                rowHeight = 0
             }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            rows[rows.count - 1].append((subview, size))
             x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
+        }
+        var y = bounds.minY
+        for row in rows {
+            let rowHeight = row.map(\.size.height).max() ?? 0
+            x = bounds.minX
+            for (subview, size) in row {
+                subview.place(at: CGPoint(x: x, y: y + (rowHeight - size.height) / 2), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += rowHeight + spacing
         }
     }
 }
